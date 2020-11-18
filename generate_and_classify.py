@@ -8,6 +8,8 @@ import random
 
 import matplotlib.pyplot as plt
 
+import numpy as np
+
 ph = Phyme()
 def get_rhymes(word):
     try:
@@ -60,27 +62,54 @@ def swap(string,prob):
     return out
 
 
-def evaluate(text, prob, tokenizer, model):
-    swap_text = swap(text,prob)
-    tokenized = tokenizer(swap_text, return_tensors="pt")
-    logits = model(**tokenized).logits
-    results = torch.softmax(logits, dim=1).tolist()[0]
+def evaluate(text, prob, tokenizer, model, iters=5):
+    out = np.zeros((iters,iters))
+    if prob == 0.0:
+        print("ay")
+        tokenized = tokenizer(text, return_tensors="pt")
+        logits = model(**tokenized).logits
+        return logits.tolist()[0][1]
+
+    for i in range(iters):
+        for j in range(iters):
+            swap_text = swap(text,prob)
+            tokenized = tokenizer(swap_text, return_tensors="pt")
+            logits = model(**tokenized).logits
+            out[i][j]=logits.tolist()[0][1]
+        # results = torch.softmax(logits, dim=1).tolist()[0]
+    # print("HHHHHH\n",logits.tolist())
+    # print("SUM:\n",logits.tolist()[0][0]+logits.tolist()[0][1])
     #print(logits)
-    print(swap_text)
-    return results[0]
+    #print(swap_text)
+    return np.median(np.mean(out,1))
 
+def normalize(l):
+    if len(l) == 0:
+        return []
+    minL = l[0]
+    maxL = l[0]
+    for i in l:
+        if i<minL:
+            minL=i
+        if i>maxL:
+            maxL=i
+    out = []
+    for i in l:
+        out.append((i-minL)/(maxL-minL))
+    return out
 
-def best_prob(generator,tokenizer,model,string="",max_length=5, step = 10):
+def best_prob(generator,tokenizer,model,string="",max_length=5, step = 10, cap = 0.5):
     text = generator(string, max_length)[0]['generated_text']
     x = []
     y = []
     z = []
     for p in range(step):
-        x.append(p/step)
-        detected = evaluate(text,p/step,tokenizer,model)
-        y.append(detected)
-        z.append(detected*p/step)
-    plt.plot(x,y)
+        x.append(cap*p/step)
+        y.append(evaluate(text,cap*p/step,tokenizer,model))
+    w = normalize(y)
+    plt.plot(x,w)
+    for p in range(step):
+        z.append(x[p]*w[p])
     plt.plot(x,z)
     plt.show()
     print(y)
