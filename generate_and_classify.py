@@ -72,6 +72,7 @@ def evaluate(text, prob, tokenizer, model, iters=5):
 
     for i in range(iters):
         for j in range(iters):
+            print(iters*i+j)
             swap_text = swap(text,prob)
             tokenized = tokenizer(swap_text, return_tensors="pt")
             logits = model(**tokenized).logits
