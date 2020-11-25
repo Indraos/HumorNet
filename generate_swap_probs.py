@@ -1,8 +1,7 @@
-import transformers
-import torch
-
 from Phyme import Phyme, rhymeUtils as ru
 import itertools
+
+from gensim.models import Word2Vec
 
 import random
 
@@ -110,8 +109,7 @@ def best_prob(generator,tokenizer,model,string="",max_length=5, step = 10, cap =
     w = normalize(y)
     plt.plot(x,w)
     for p in range(step):
-        z.append(-1.0*x[p]*w[p])
-    plt.show()
+        z.append(x[p]*w[p])
     plt.plot(x,z)
     plt.show()
     print(y)
