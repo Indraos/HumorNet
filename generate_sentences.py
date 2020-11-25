@@ -25,7 +25,7 @@ def create_splice(generator,tokenizer,model,string="",max_length=10):
 
 f = open("sentences.txt", "a")
 
-for i in range(100):
+for i in range(10000):
     print(i)
     f.write(create_splice(generator,tokenizer,model))
     
