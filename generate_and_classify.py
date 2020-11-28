@@ -81,12 +81,10 @@ def new_sent(string,word_list):
     #This function is not used in training
     #Only once the net is fully trained do we use this to print examples
     out = ""
-    last = 0
     word_index = 0
     building = False
     for index,char in enumerate(string):
         if is_letter(char) and not building:
-            last = index
             building = True
         elif (not is_letter(char)) and (not building):
             out+=char
@@ -110,13 +108,11 @@ def new_sent_grad(string,word_list,perturbed):
     #Similar to new_sent
     #Efficiently generates sentences for many perturbations
     out = [""]
-    last = 0
     word_index = 0
-    perturbed_index = 0
+    # perturbed_index = 0
     building = False
     for index,char in enumerate(string):
         if is_letter(char) and not building:
-            last = index
             building = True
         elif (not is_letter(char)) and (not building):
             out+=char
@@ -127,10 +123,10 @@ def new_sent_grad(string,word_list,perturbed):
                 for i in range(len(out)-1):
                     out[i] += word_list[word_index]
                     out[i] += char
-                out[len(out)-1] += perturbed[1][perturbed_index]
+                out[len(out)-1] += perturbed[1][word_index]#[perturbed_index]
                 out[len(out)-1] += char
                 word_index += 1
-                perturbed_index += 1
+                # perturbed_index += 1
             else:
                 for i in range(len(out)):
                     out[i] += word_list[word_index]
@@ -142,9 +138,9 @@ def new_sent_grad(string,word_list,perturbed):
             out.append(out[0])
             for i in range(len(out)-1):
                 out[i] += word_list[word_index]
-            out[len(out)-1] += perturbed[1][perturbed_index]
+            out[len(out)-1] += perturbed[1][word_index]#[perturbed_index]
             word_index += 1
-            perturbed_index += 1
+            # perturbed_index += 1
         else:
             for i in range(len(out)):
                 out[i] += word_list[word_index]
@@ -152,9 +148,12 @@ def new_sent_grad(string,word_list,perturbed):
     
     if word_index != len(word_list):
         print("ERROR: misalignment when reforming sentence")
+
+    if len(out) != len(perturbed[2])+1:
+        print("ERROR: perturb misalignment")
         
-    if perturbed_index != len(perturbed[1]):
-        print("ERROR: misalignment when reforming sentence")
+    # if perturbed_index != len(perturbed[1]):
+    #     print("ERROR: misalignment when reforming sentence")
     
     return out
 
@@ -191,33 +190,60 @@ def swap(word_list,prob_vec,p_step=.05):
                 new.append(word)
                 perturbed[1].append(new_word)
                 perturbed[0].append(1)
+                perturbed[2].append(index)
             elif prob_vec[index]-p_step < samp:
                 new.append(new_word)
                 perturbed[1].append(word)
                 perturbed[0].append(-1)
+                perturbed[2].append(index)
             else:
                 new.append(new_word)
                 perturbed[0].append(0)
+                perturbed[1].append(new_word)
             
         else:
             new.append(word)
             perturbed[0].append(0)
+            perturbed[1].append(word)
         
     return new,perturbed
 
 
 def score(text, tokenizer, model):
-    #Returns score for a sentence string TEXT
+    #GPT2 score
+    #Input: TEXT is a sentence in string form
+    #Input: TOKENIZER, MODEL are the pretrained things
     tokenized = tokenizer(text, return_tensors="pt")
     logits = model(**tokenized).logits
     return logits.tolist()[0][1]
 
 
-def evaluate(text,prob_vec, tokenizer, model):
-    #This is what you actually run
+def evaluate(text,prob_vec,tokenizer, model, p_step = .05):
+    #THE MAIN FUNCTION
+    #Input: TEXT is a sentence in string form
+    #Input: PROB_VEC is a numpy array of swap probabilities
+    #       with length = the number of words in TEXT (i.e. len(sent2word(text)))
+    #Returns: loss for these probabilities on this sentence in a single stochastic run
+    #Returns: gradient at this point in a sample of dimension corresponding to a coupling
+    #       that is, gradient will have many 0 entries, but will be better for SGD
     word_list = sent2word(text)
-    new,perturbed = swap(word_list,prob_vec)
+    new,perturbed = swap(word_list,prob_vec,p_step)
     sentence_list = new_sent_grad(text,new,perturbed)
+    scores = [score(sent,tokenizer,model) for sent in sentence_list]
+    
+    loss = -1.0*scores[0]*np.linalg.norm(prob_vec)
+    
+    gradient = np.zeros(len(new))
+    
+    for i,index in enumerate(perturbed[2]):
+        prob_vec[index] += p_step*perturbed[0][index]
+        p_mag = np.linalg.norm(prob_vec)
+        prob_vec[index] -= p_step*perturbed[0][index]
+        p_loss = -1.0*scores[index]*p_mag
+        
+        gradient[index] = (p_loss-loss)/p_step
+    
+    return loss,gradient
     
 
 
