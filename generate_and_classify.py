@@ -3,26 +3,38 @@ import torch
 
 from Phyme import Phyme, rhymeUtils as ru
 import itertools
+import nltk 
+import gensim
 
 import random
 
 import matplotlib.pyplot as plt
-
 import numpy as np
+from sklearn.manifold import TSNE
 
+# load pretrained Google vectors
+model = gensim.models.KeyedVectors.load_word2vec_format('data/GoogleNews-vectors-negative300.bin.gz', binary=True)  
+words = list(word for word in model.vocab.keys())
+vectors = [model[word] for word in words]
+# get t-SNE embeddings
+tsne = TSNE(n_components = 10, init = 'random', random_state = 10, perplexity = 100)
+vectors_tsne = tsne.fit_transform(vectors)
+tsne_embeddings = dict(zip(words,vectors_tsne))
 
 def long_embedding(word):
     #implement full 250 long embedding here
     #return as a numpy vec
     #have it return a vector of zeros if word is not pre-trained 
-    pass
+    try:
+        return model[word]
+    except:
+        return np.zeros(300)
 
 def short_embedding(word):
     #implement PCA reduced embedding here
     #return as a numpy vec
     #have it return a vector of zeros if word is not pre-trained 
-    pass
-
+    return tsne_embeddings[word]
 
 ph = Phyme()
 def get_rhymes(word):
