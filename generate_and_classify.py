@@ -21,7 +21,7 @@ def embedding(word: str) -> tuple(int):
     
 
 ph = Phyme()
-def get_rhymes(word: str, phyme=Phyme(): object) -> [str]:
+def get_rhymes(word: str, phyme: Phyme) -> [str]:
     """
     Get list of rhyming words with the same syllable count
     """
@@ -201,67 +201,68 @@ def score(text:str, tokenizer:transformers.Autotokenizer, model:transformers.Aut
     logits = model(**tokenized).logits
     return logits.tolist()[0][1]
 
-@custom_gradient
-def evaluate(sentence:string, prob_vec, p_step = .05):
-    """Gives loss
+# @custom_gradient
+# def evaluate(sentence:string, prob_vec, p_step = .05):
+#     """
+#     Gives loss
 
-    #Input: TEXT is a sentence in string form
-    #Input: PROB_VEC is a numpy array of swap probabilities
-    #       with length = the number of words in TEXT (i.e. len(sent2word(text)))
-    #Returns: loss for these probabilities on this sentence in a single stochastic run
-    #Returns: gradient at this point in a sample of dimension corresponding to a coupling
-    #       that is, gradient will have many 0 entries, but will be better for SGD
-    text = embedded_sentence_inverter[sentence_embedding]
-    """
-    word_list = sent2word(text)
-    new,perturbed = swap(word_list,prob_vec,p_step)
-    sentence_list = new_sent_grad(text,new,perturbed)
-    scores = [score(sent,tokenizer,model) for sent in sentence_list]
+#     Input: TEXT is a sentence in string form
+#     Input: PROB_VEC is a numpy array of swap probabilities
+#            with length = the number of words in TEXT (i.e. len(sent2word(text)))
+#     Returns: loss for these probabilities on this sentence in a single stochastic run
+#     Returns: gradient at this point in a sample of dimension corresponding to a coupling
+#            that is, gradient will have many 0 entries, but will be better for SGD
+#     text = embedded_sentence_inverter[sentence_embedding]
+#     """
+#     word_list = sent2word(text)
+#     new,perturbed = swap(word_list,prob_vec,p_step)
+#     sentence_list = new_sent_grad(text,new,perturbed)
+#     scores = [score(sent,tokenizer,model) for sent in sentence_list]
     
-    loss = -1.0*scores[0]*np.linalg.norm(prob_vec)
+#     loss = -1.0*scores[0]*np.linalg.norm(prob_vec)
     
-    gradient = np.zeros(len(new))
+#     gradient = np.zeros(len(new))
     
-    for i,index in enumerate(perturbed[2]):
-        prob_vec[index] += p_step*perturbed[0][index]
-        p_mag = np.linalg.norm(prob_vec)
-        prob_vec[index] -= p_step*perturbed[0][index]
-        p_loss = -1.0*scores[index]*p_mag
+#     for i,index in enumerate(perturbed[2]):
+#         prob_vec[index] += p_step*perturbed[0][index]
+#         p_mag = np.linalg.norm(prob_vec)
+#         prob_vec[index] -= p_step*perturbed[0][index]
+#         p_loss = -1.0*scores[index]*p_mag
         
-        gradient[index] = (p_loss-loss)/p_step
+#         gradient[index] = (p_loss-loss)/p_step
     
-    return loss,gradient
+#     return loss,gradient
     
 
-@custom_loss
-def custom_loss(input, p_step=0.5):
+
+def custom_loss(input):
     @custom_gradient
-    def loss(input, y_pred):
-      sentence_embedding = input
-      prob_vec = y_pred
-
-
-      text = embedded_sentence_inverter[sentence_embedding]
-      word_list = sent2word(text)
-      new,perturbed = swap(word_list,prob_vec,p_step)
-      sentence_list = new_sent_grad(text,new,perturbed)
-      scores = [score(sent,tokenizer,model) for sent in sentence_list]
-      
-      loss = -1.0*scores[0]*np.linalg.norm(prob_vec)
-
-      for i,index in enumerate(perturbed[2]):
-          prob_vec[index] += p_step*perturbed[0][index]
-          p_mag = np.linalg.norm(prob_vec)
-          prob_vec[index] -= p_step*perturbed[0][index]
-          p_loss = -1.0*scores[index]*p_mag
-          
-      return loss
+    def loss(input, y_pred=tf.zeros()):
+        sentence_embedding = input
+        prob_vec = y_pred
+        text = embedded_sentence_inverter[sentence_embedding]
+        word_list = sent2word(text)
+        new,perturbed = swap(word_list,prob_vec,p_step)
+        sentence_list = new_sent_grad(text,new,perturbed)
+        scores = [score(sent,tokenizer,model) for sent in sentence_list]
+        
+        loss = -1.0*scores[0]*np.linalg.norm(prob_vec)
+        def grad(y):
+            gradient = np.zeros(len(new))
+            for i,index in enumerate(perturbed[2]):
+                prob_vec[index] += p_step*perturbed[0][index]
+                p_mag = np.linalg.norm(prob_vec)
+                prob_vec[index] -= p_step*perturbed[0][index]
+                p_loss = -1.0*scores[index]*p_mag
+                gradient[index] = (p_loss-loss)/p_step
+        return loss
 
 sentence = "Put sentence here"
 sent_embedding = (0,0,0,0,0,0,0) # TODO: convert sentence to embedding
 input = tf.keras.Input(shape=(50,))
 x = tf.keras.layers.Dense(10, activation="relu")(input)
 x = tf.keras.layers.Dense(5, activation="relu")(x)
+x = tf.keras.layers.Lambda(lambda x: x/2)
 x = tf.keras.layers.Dropout(.5)(x)
 model = tf.keras.Model(input,x)
 model.compile(loss=custom_loss(input), optimizer=tf.optimizers.Adam(learning_rate=0.001) )
