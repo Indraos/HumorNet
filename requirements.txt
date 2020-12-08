@@ -1,0 +1,8 @@
+tensorflow
+numpy
+pandas
+transformers
+gensim
+jupyter
+scikit-learn
+Phyme
