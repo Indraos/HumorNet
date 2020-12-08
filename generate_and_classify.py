@@ -1,40 +1,27 @@
 import transformers
-import torch
 
 from Phyme import Phyme, rhymeUtils as ru
 import itertools
-import nltk 
-import gensim
+import pickle
 
 import random
 
-import matplotlib.pyplot as plt
 import numpy as np
-from sklearn.manifold import TSNE
+
 
 # load pretrained Google vectors
-model = gensim.models.KeyedVectors.load_word2vec_format('data/GoogleNews-vectors-negative300.bin.gz', binary=True)  
-words = list(word for word in model.vocab.keys())
-vectors = [model[word] for word in words]
-# get t-SNE embeddings
-tsne = TSNE(n_components = 10, init = 'random', random_state = 10, perplexity = 100)
-vectors_tsne = tsne.fit_transform(vectors)
-tsne_embeddings = dict(zip(words,vectors_tsne))
+pca_embeddings = pickle.load( open( "embedding.p", "rb" ) )
+embedded_sentence_inverter = pickle.load( open( "inverse.p", "rb" ) )
+
+tokenizer = transformers.AutoTokenizer.from_pretrained("bert-base-uncased")
+model = transformers.AutoModelForSequenceClassification.from_pretrained("bert-base-uncased", return_dict=True)
 
 def long_embedding(word):
-    #implement full 250 long embedding here
-    #return as a numpy vec
-    #have it return a vector of zeros if word is not pre-trained 
-    try:
-        return model[word]
-    except:
-        return np.zeros(300)
-
-def short_embedding(word):
-    #implement PCA reduced embedding here
-    #return as a numpy vec
-    #have it return a vector of zeros if word is not pre-trained 
-    return tsne_embeddings[word]
+    if word in pca_embeddings:
+        return pca_embeddings[word]
+    else:
+        return (0.0,0.0,0.0,0.0,0.0)
+    
 
 ph = Phyme()
 def get_rhymes(word):
@@ -216,7 +203,7 @@ def score(text, tokenizer, model):
     return logits.tolist()[0][1]
 
 
-def evaluate(text,prob_vec,tokenizer, model, p_step = .05):
+def evaluate(sentence_embedding, prob_vec, p_step = .05):
     #THE MAIN FUNCTION
     #Input: TEXT is a sentence in string form
     #Input: PROB_VEC is a numpy array of swap probabilities
@@ -224,6 +211,8 @@ def evaluate(text,prob_vec,tokenizer, model, p_step = .05):
     #Returns: loss for these probabilities on this sentence in a single stochastic run
     #Returns: gradient at this point in a sample of dimension corresponding to a coupling
     #       that is, gradient will have many 0 entries, but will be better for SGD
+    text = embedded_sentence_inverter[sentence_embedding]
+    
     word_list = sent2word(text)
     new,perturbed = swap(word_list,prob_vec,p_step)
     sentence_list = new_sent_grad(text,new,perturbed)
@@ -243,8 +232,3 @@ def evaluate(text,prob_vec,tokenizer, model, p_step = .05):
     
     return loss,gradient
     
-
-
-# generator = transformers.pipeline("text-generation")
-# tokenizer = transformers.AutoTokenizer.from_pretrained("bert-base-uncased")
-# model = transformers.AutoModelForSequenceClassification.from_pretrained("bert-base-uncased", return_dict=True)
