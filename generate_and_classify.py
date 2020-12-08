@@ -16,7 +16,10 @@ embedded_sentence_inverter = pickle.load( open( "inverse.p", "rb" ) )
 tokenizer = transformers.AutoTokenizer.from_pretrained("bert-base-uncased")
 model = transformers.AutoModelForSequenceClassification.from_pretrained("bert-base-uncased", return_dict=True)
 
-def long_embedding(word):
+def embedding(word: str -> tulpe(int)):
+    """
+    Retrieve embedding vectors
+    """
     if word in pca_embeddings:
         return pca_embeddings[word]
     else:
@@ -24,7 +27,7 @@ def long_embedding(word):
     
 
 ph = Phyme()
-def get_rhymes(word):
+def get_rhymes(word: str, phyme=Phyme(): object -> [str]):
     #Get list of rhyming words with the same syllable count
     try:
         ns = ru.count_syllables(word)
@@ -42,7 +45,7 @@ def is_letter(char):
     return (char >= 'A' and char <= 'Z') or (char >= 'a' and char <= 'z') or char == "'"
 
 
-def sent2word(string):
+def sent2word(sentence: str -> [str]):
     #Convert sentence to list of words
     out = []
     last = 0
