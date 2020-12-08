@@ -246,11 +246,17 @@ def evaluate(text,prob_vec,tokenizer, model, p_step = .05):
     return loss,gradient
     
 
+def train(sentences,tokenizer, model, p_step = .05):
+    tokenizer = transformers.AutoTokenizer.from_pretrained("bert-base-uncased")
+    model = transformers.AutoModelForSequenceClassification.from_pretrained("bert-base-uncased", return_dict=True)
+    W_0 = np.random.rand(90,30)
+    W_1 = np.random.rand(30,30)
+    
+    
+    text = random sentence
+    
 
 
-
-
+#TODO: sentences = list of all sentences
 
 # generator = transformers.pipeline("text-generation")
-# tokenizer = transformers.AutoTokenizer.from_pretrained("bert-base-uncased")
-# model = transformers.AutoModelForSequenceClassification.from_pretrained("bert-base-uncased", return_dict=True)
