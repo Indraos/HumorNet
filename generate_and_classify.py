@@ -52,7 +52,7 @@ def get_rhymes(word):
 
 def is_letter(char):
     #Helper function for word parsing
-    return (char >= 'A' and char <= 'Z') or (char >= 'a' and char <= 'z')
+    return (char >= 'A' and char <= 'Z') or (char >= 'a' and char <= 'z') or char == "'"
 
 
 def sent2word(string):
@@ -64,11 +64,9 @@ def sent2word(string):
         if is_letter(char) and not building:
             last = index
             building = True
-        elif (not is_letter(char)) and (not building):
-            out+=char
         elif (not is_letter(char)) and building:
             building = False
-            out.append(string[last:index+1])
+            out.append(string[last:index])
                 
     if building:
         out.append(string[last:])
@@ -246,17 +244,7 @@ def evaluate(text,prob_vec,tokenizer, model, p_step = .05):
     return loss,gradient
     
 
-def train(sentences,tokenizer, model, p_step = .05):
-    tokenizer = transformers.AutoTokenizer.from_pretrained("bert-base-uncased")
-    model = transformers.AutoModelForSequenceClassification.from_pretrained("bert-base-uncased", return_dict=True)
-    W_0 = np.random.rand(90,30)
-    W_1 = np.random.rand(30,30)
-    
-    
-    text = random sentence
-    
-
-
-#TODO: sentences = list of all sentences
 
 # generator = transformers.pipeline("text-generation")
+# tokenizer = transformers.AutoTokenizer.from_pretrained("bert-base-uncased")
+# model = transformers.AutoModelForSequenceClassification.from_pretrained("bert-base-uncased", return_dict=True)
