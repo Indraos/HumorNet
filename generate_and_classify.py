@@ -1,22 +1,16 @@
 import transformers
-
 from Phyme import Phyme, rhymeUtils as ru
 import itertools
 import pickle
-
 import random
-
 import numpy as np
 
-
-# load pretrained Google vectors
 pca_embeddings = pickle.load( open( "embedding.p", "rb" ) )
 embedded_sentence_inverter = pickle.load( open( "inverse.p", "rb" ) )
-
 tokenizer = transformers.AutoTokenizer.from_pretrained("bert-base-uncased")
 model = transformers.AutoModelForSequenceClassification.from_pretrained("bert-base-uncased", return_dict=True)
 
-def embedding(word: str -> tulpe(int)):
+def embedding(word: str) -> tuple(int):
     """
     Retrieve embedding vectors
     """
@@ -27,8 +21,10 @@ def embedding(word: str -> tulpe(int)):
     
 
 ph = Phyme()
-def get_rhymes(word: str, phyme=Phyme(): object -> [str]):
-    #Get list of rhyming words with the same syllable count
+def get_rhymes(word: str, phyme=Phyme(): object) -> [str]:
+    """
+    Get list of rhyming words with the same syllable count
+    """
     try:
         ns = ru.count_syllables(word)
         words = ph.get_perfect_rhymes(word)
@@ -40,13 +36,17 @@ def get_rhymes(word: str, phyme=Phyme(): object -> [str]):
         return [word]
 
 
-def is_letter(char):
-    #Helper function for word parsing
+def is_letter(char: chr) -> bool:
+    """
+    Helper function for word parsing
+    """
     return (char >= 'A' and char <= 'Z') or (char >= 'a' and char <= 'z') or char == "'"
 
 
-def sent2word(sentence: str -> [str]):
-    #Convert sentence to list of words
+def sent2word(sentence: str) -> [str]:
+    """
+    Convert sentence to list of words
+    """
     out = []
     last = 0
     building = False
@@ -56,18 +56,18 @@ def sent2word(sentence: str -> [str]):
             building = True
         elif (not is_letter(char)) and building:
             building = False
-            out.append(string[last:index])
-                
+            out.append(string[last:index])    
     if building:
-        out.append(string[last:])
-        
+        out.append(string[last:]) 
     return out
 
-def new_sent(string,word_list):
-    #Returns a string that is the new sentence after word swaps
-    #Inputs: original sentence STRING and swapped word list WORD_LIST
-    #This function is not used in training
-    #Only once the net is fully trained do we use this to print examples
+def new_sent(string: str, word_list: [str]) -> str:
+    """
+    Returns a string that is the new sentence after word swaps
+
+    This function is not used in training
+    Only once the net is fully trained do we use this to print examples
+    """
     out = ""
     word_index = 0
     building = False
@@ -80,8 +80,7 @@ def new_sent(string,word_list):
             building = False
             out+=word_list[word_index]
             word_index += 1
-            out+=char
-                
+            out+=char          
     if building:
         out+=word_list[word_index]
         word_index += 1
@@ -91,13 +90,11 @@ def new_sent(string,word_list):
     
     return out
 
-
 def new_sent_grad(string,word_list,perturbed):
     #Similar to new_sent
     #Efficiently generates sentences for many perturbations
     out = [""]
     word_index = 0
-    # perturbed_index = 0
     building = False
     for index,char in enumerate(string):
         if is_letter(char) and not building:
@@ -111,10 +108,9 @@ def new_sent_grad(string,word_list,perturbed):
                 for i in range(len(out)-1):
                     out[i] += word_list[word_index]
                     out[i] += char
-                out[len(out)-1] += perturbed[1][word_index]#[perturbed_index]
+                out[len(out)-1] += perturbed[1][word_index]
                 out[len(out)-1] += char
                 word_index += 1
-                # perturbed_index += 1
             else:
                 for i in range(len(out)):
                     out[i] += word_list[word_index]
@@ -126,9 +122,8 @@ def new_sent_grad(string,word_list,perturbed):
             out.append(out[0])
             for i in range(len(out)-1):
                 out[i] += word_list[word_index]
-            out[len(out)-1] += perturbed[1][word_index]#[perturbed_index]
+            out[len(out)-1] += perturbed[1][word_index]
             word_index += 1
-            # perturbed_index += 1
         else:
             for i in range(len(out)):
                 out[i] += word_list[word_index]
@@ -139,16 +134,14 @@ def new_sent_grad(string,word_list,perturbed):
 
     if len(out) != len(perturbed[2])+1:
         print("ERROR: perturb misalignment")
-        
-    # if perturbed_index != len(perturbed[1]):
-    #     print("ERROR: misalignment when reforming sentence")
-    
     return out
 
     
-def word_swap(word):
-    #Swaps single word weighted by embedding similarity
-    #TODO: Must implement long_embedding above in order to get what we want here
+def word_swap(word: str) -> str:
+    """
+    Swaps single word weighted by embedding similarity
+    Must implement long_embedding above in order to get what we want here
+    """
     rhymes = get_rhymes(word)
     WE = long_embedding(word)
     weights = []
@@ -156,20 +149,20 @@ def word_swap(word):
         RE = long_embedding(r)
         cos = np.dot(WE,RE) / (np.sqrt(np.dot(WE,WE)) * np.sqrt(np.dot(RE,RE)))
         weights.append(1+cos)
-        #Potentially tweak these weights if we don't get positive results
     return random.choices(population = rhymes,weights = weights,k=1)[0]
 
-def swap(word_list,prob_vec,p_step=.05):
-    #Creates swapped word lists, weighted by embedding similarity
-    #Returns: NEW is the newly swapped word list
-    #Returns: PERTURBED is an array containing gradient data and coupled perturbations of the random sentence
-    #Input: WORD_LIST is the original sentence in word list form (run sent2word on the sentence string)
-    #Input: PROB_VEC is a list of probabilities.  Pad the end with zeros if it's length exceeds the number of words
-    #Input: P_STEP is the variable for computing the discrete
+def swap(word_list:str,prob_vec: [str],p_step:float=.05) -> (str,str):
+    """Creates swapped word lists, weighted by embedding similarity
     
+    Input: WORD_LIST is the original sentence in word list form (run sent2word on the sentence string)
+    Input: PROB_VEC is a list of probabilities.  Pad the end with zeros if it's length exceeds the number of words
+    Input: P_STEP is the variable for computing the discrete
+    
+    Returns: NEW is the newly swapped word list
+    Returns: PERTURBED is an array containing gradient data and coupled perturbations of the random sentence
+    """
     new = []
     perturbed = [[],[]]
-    
     for index,word in enumerate(word_list):
         samp = random.random()
         if prob_vec[index]+p_step >= samp:
@@ -197,17 +190,21 @@ def swap(word_list,prob_vec,p_step=.05):
     return new,perturbed
 
 
-def score(text, tokenizer, model):
-    #GPT2 score
-    #Input: TEXT is a sentence in string form
-    #Input: TOKENIZER, MODEL are the pretrained things
+def score(text:str, tokenizer:transformers.Autotokenizer, model:transformers.AutoModelForSequenceClassification) -> float:
+    """
+    GPT2 score
+
+    Input: TEXT is a sentence in string form
+    Input: TOKENIZER, MODEL are the pretrained things
+    """
     tokenized = tokenizer(text, return_tensors="pt")
     logits = model(**tokenized).logits
     return logits.tolist()[0][1]
 
+@custom_gradient
+def evaluate(sentence:string, prob_vec, p_step = .05):
+    """Gives loss
 
-def evaluate(sentence_embedding, prob_vec, p_step = .05):
-    #THE MAIN FUNCTION
     #Input: TEXT is a sentence in string form
     #Input: PROB_VEC is a numpy array of swap probabilities
     #       with length = the number of words in TEXT (i.e. len(sent2word(text)))
@@ -215,7 +212,7 @@ def evaluate(sentence_embedding, prob_vec, p_step = .05):
     #Returns: gradient at this point in a sample of dimension corresponding to a coupling
     #       that is, gradient will have many 0 entries, but will be better for SGD
     text = embedded_sentence_inverter[sentence_embedding]
-    
+    """
     word_list = sent2word(text)
     new,perturbed = swap(word_list,prob_vec,p_step)
     sentence_list = new_sent_grad(text,new,perturbed)
@@ -235,3 +232,37 @@ def evaluate(sentence_embedding, prob_vec, p_step = .05):
     
     return loss,gradient
     
+
+@custom_loss
+def custom_loss(input, p_step=0.5):
+    @custom_gradient
+    def loss(input, y_pred):
+      sentence_embedding = input
+      prob_vec = y_pred
+
+
+      text = embedded_sentence_inverter[sentence_embedding]
+      word_list = sent2word(text)
+      new,perturbed = swap(word_list,prob_vec,p_step)
+      sentence_list = new_sent_grad(text,new,perturbed)
+      scores = [score(sent,tokenizer,model) for sent in sentence_list]
+      
+      loss = -1.0*scores[0]*np.linalg.norm(prob_vec)
+
+      for i,index in enumerate(perturbed[2]):
+          prob_vec[index] += p_step*perturbed[0][index]
+          p_mag = np.linalg.norm(prob_vec)
+          prob_vec[index] -= p_step*perturbed[0][index]
+          p_loss = -1.0*scores[index]*p_mag
+          
+      return loss
+
+sentence = "Put sentence here"
+sent_embedding = (0,0,0,0,0,0,0) # TODO: convert sentence to embedding
+input = tf.keras.Input(shape=(50,))
+x = tf.keras.layers.Dense(10, activation="relu")(input)
+x = tf.keras.layers.Dense(5, activation="relu")(x)
+x = tf.keras.layers.Dropout(.5)(x)
+model = tf.keras.Model(input,x)
+model.compile(loss=custom_loss(input), optimizer=tf.optimizers.Adam(learning_rate=0.001) )
+model.fit(sentence_embeddings, zero, batch_size = batch_size, epochs=90, shuffle=True, verbose=1)
