@@ -7,6 +7,6 @@ cd ..
 
 yum install gcc gcc-c++
 
-pip3 install requirements.txt
+pip3 install -r requirements.txt
 
 jupyter notebook --no-browser port=8888
