@@ -7,8 +7,11 @@ import numpy as np
 import tensorflow as tf
 from typing import Tuple
 
+embedded_sentences = np.array(pickle.load(open("td.p","rb")))
 pca_embeddings = pickle.load(open("embedding.p","rb" ) )
-embedded_sentence_inverter = pickle.load( open( "inverse.p", "rb" ) )
+embedded_sentence_inverter = pickle.load(open( "inverse.p", "rb" ))
+# embedded_sentence_inverter = tf.lookup.StaticHashTable(
+#     tf.lookup.KeyValueTensorInitializer(np.array(list(inverter.keys())), np.array(list(inverter.values()))), "")
 tokenizer = transformers.AutoTokenizer.from_pretrained("bert-base-uncased")
 model = transformers.AutoModelForSequenceClassification.from_pretrained("bert-base-uncased", return_dict=True)
 
@@ -206,9 +209,8 @@ def score(text:str, tokenizer:transformers.AutoTokenizer, model:transformers.Aut
 def custom_loss(input):
     @tf.custom_gradient
     def loss(prob_vec, y_pred=0):
-        sentence_embedding = input
         prob_vec = y_pred
-        text = embedded_sentence_inverter[sentence_embedding]
+        text = embedded_sentence_inverter[input.ref()]
         word_list = sent2word(text)
         new,perturbed = swap(word_list,prob_vec)
         sentence_list = new_sent_grad(text,new,perturbed)
@@ -224,12 +226,13 @@ def custom_loss(input):
                 p_loss = -1.0*scores[index]*p_mag
                 gradient[index] = (p_loss-loss)/p_step
         return loss, grad
+    return loss
 
-i = tf.keras.Input(shape=(50,))
+i = tf.keras.Input(shape=(50,5,))
 x = tf.keras.layers.Dense(10, activation="relu")(i)
 x = tf.keras.layers.Dense(5, activation="relu")(x)
 x = tf.keras.layers.Lambda(lambda x: x/2)(x)
 x = tf.keras.layers.Dropout(.5)(x)
 model = tf.keras.Model(i,x)
 model.compile(loss=custom_loss(i), optimizer=tf.optimizers.Adam(learning_rate=0.001) )
-model.fit(np.array(pca_embeddings.values()), 0, batch_size = 10, epochs=90, shuffle=True, verbose=1)
+model.fit(embedded_sentences, embedded_sentences, shuffle=True, verbose=1)
