@@ -73,7 +73,7 @@ def new_sent(string: str, word_list: [str]) -> str:
     out = ""
     word_index = 0
     building = False
-    for index,char in enumerate(string):
+    for _ ,char in enumerate(string):
         if is_letter(char) and not building:
             building = True
         elif (not is_letter(char)) and (not building):
@@ -92,13 +92,13 @@ def new_sent(string: str, word_list: [str]) -> str:
     
     return out
 
-def new_sent_grad(string,word_list,perturbed):
+def new_sent_grad(string:str,word_list:[str],perturbed:[str])->str:
     #Similar to new_sent
     #Efficiently generates sentences for many perturbations
     out = [""]
     word_index = 0
     building = False
-    for index,char in enumerate(string):
+    for _,char in enumerate(string):
         if is_letter(char) and not building:
             building = True
         elif (not is_letter(char)) and (not building):
@@ -203,40 +203,6 @@ def score(text:str, tokenizer:transformers.AutoTokenizer, model:transformers.Aut
     logits = model(**tokenized).logits
     return logits.tolist()[0][1]
 
-# @custom_gradient
-# def evaluate(sentence:string, prob_vec, p_step = .05):
-#     """
-#     Gives loss
-
-#     Input: TEXT is a sentence in string form
-#     Input: PROB_VEC is a numpy array of swap probabilities
-#            with length = the number of words in TEXT (i.e. len(sent2word(text)))
-#     Returns: loss for these probabilities on this sentence in a single stochastic run
-#     Returns: gradient at this point in a sample of dimension corresponding to a coupling
-#            that is, gradient will have many 0 entries, but will be better for SGD
-#     text = embedded_sentence_inverter[sentence_embedding]
-#     """
-#     word_list = sent2word(text)
-#     new,perturbed = swap(word_list,prob_vec,p_step)
-#     sentence_list = new_sent_grad(text,new,perturbed)
-#     scores = [score(sent,tokenizer,model) for sent in sentence_list]
-    
-#     loss = -1.0*scores[0]*np.linalg.norm(prob_vec)
-    
-#     gradient = np.zeros(len(new))
-    
-#     for i,index in enumerate(perturbed[2]):
-#         prob_vec[index] += p_step*perturbed[0][index]
-#         p_mag = np.linalg.norm(prob_vec)
-#         prob_vec[index] -= p_step*perturbed[0][index]
-#         p_loss = -1.0*scores[index]*p_mag
-        
-#         gradient[index] = (p_loss-loss)/p_step
-    
-#     return loss,gradient
-    
-
-
 def custom_loss(input):
     @tf.custom_gradient
     def loss(prob_vec, y_pred=0):
@@ -251,19 +217,19 @@ def custom_loss(input):
         loss = -1.0*scores[0]*np.linalg.norm(prob_vec)
         def grad(y, p_step=.05):
             gradient = np.zeros(len(new))
-            for i,index in enumerate(perturbed[2]):
+            for _,index in enumerate(perturbed[2]):
                 prob_vec[index] += p_step*perturbed[0][index]
                 p_mag = np.linalg.norm(prob_vec)
                 prob_vec[index] -= p_step*perturbed[0][index]
                 p_loss = -1.0*scores[index]*p_mag
                 gradient[index] = (p_loss-loss)/p_step
-        return loss
+        return loss, grad
 
-input = tf.keras.Input(shape=(50,))
-x = tf.keras.layers.Dense(10, activation="relu")(input)
+i = tf.keras.Input(shape=(50,))
+x = tf.keras.layers.Dense(10, activation="relu")(i)
 x = tf.keras.layers.Dense(5, activation="relu")(x)
 x = tf.keras.layers.Lambda(lambda x: x/2)(x)
 x = tf.keras.layers.Dropout(.5)(x)
-model = tf.keras.Model(input,x)
-model.compile(loss=custom_loss(input), optimizer=tf.optimizers.Adam(learning_rate=0.001) )
-model.fit(pca_embeddings, 0, batch_size = 10, epochs=90, shuffle=True, verbose=1)
+model = tf.keras.Model(i,x)
+model.compile(loss=custom_loss(i), optimizer=tf.optimizers.Adam(learning_rate=0.001) )
+model.fit(np.array(pca_embeddings.values()), 0, batch_size = 10, epochs=90, shuffle=True, verbose=1)
