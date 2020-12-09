@@ -4,13 +4,15 @@ import itertools
 import pickle
 import random
 import numpy as np
+import tensorflow as tf
+from typing import Tuple
 
-pca_embeddings = pickle.load( open( "embedding.p", "rb" ) )
+pca_embeddings = pickle.load(open("embedding.p","rb" ) )
 embedded_sentence_inverter = pickle.load( open( "inverse.p", "rb" ) )
 tokenizer = transformers.AutoTokenizer.from_pretrained("bert-base-uncased")
 model = transformers.AutoModelForSequenceClassification.from_pretrained("bert-base-uncased", return_dict=True)
 
-def embedding(word: str) -> tuple(int):
+def embedding(word: str) -> Tuple[int, ...]:
     """
     Retrieve embedding vectors
     """
@@ -21,7 +23,7 @@ def embedding(word: str) -> tuple(int):
     
 
 ph = Phyme()
-def get_rhymes(word: str, phyme: Phyme) -> [str]:
+def get_rhymes(word: str) -> [str]:
     """
     Get list of rhyming words with the same syllable count
     """
@@ -50,15 +52,15 @@ def sent2word(sentence: str) -> [str]:
     out = []
     last = 0
     building = False
-    for index,char in enumerate(string):
+    for index,char in enumerate(sentence):
         if is_letter(char) and not building:
             last = index
             building = True
         elif (not is_letter(char)) and building:
             building = False
-            out.append(string[last:index])    
+            out.append(sentence[last:index])    
     if building:
-        out.append(string[last:]) 
+        out.append(sentence[last:]) 
     return out
 
 def new_sent(string: str, word_list: [str]) -> str:
@@ -140,13 +142,13 @@ def new_sent_grad(string,word_list,perturbed):
 def word_swap(word: str) -> str:
     """
     Swaps single word weighted by embedding similarity
-    Must implement long_embedding above in order to get what we want here
+    Must implement embedding above in order to get what we want here
     """
     rhymes = get_rhymes(word)
-    WE = long_embedding(word)
+    WE = embedding(word)
     weights = []
     for r in rhymes:
-        RE = long_embedding(r)
+        RE = embedding(r)
         cos = np.dot(WE,RE) / (np.sqrt(np.dot(WE,WE)) * np.sqrt(np.dot(RE,RE)))
         weights.append(1+cos)
     return random.choices(population = rhymes,weights = weights,k=1)[0]
@@ -190,7 +192,7 @@ def swap(word_list:str,prob_vec: [str],p_step:float=.05) -> (str,str):
     return new,perturbed
 
 
-def score(text:str, tokenizer:transformers.Autotokenizer, model:transformers.AutoModelForSequenceClassification) -> float:
+def score(text:str, tokenizer:transformers.AutoTokenizer, model:transformers.AutoModelForSequenceClassification) -> float:
     """
     GPT2 score
 
@@ -236,18 +238,18 @@ def score(text:str, tokenizer:transformers.Autotokenizer, model:transformers.Aut
 
 
 def custom_loss(input):
-    @custom_gradient
-    def loss(input, y_pred=tf.zeros()):
+    @tf.custom_gradient
+    def loss(prob_vec, y_pred=0):
         sentence_embedding = input
         prob_vec = y_pred
         text = embedded_sentence_inverter[sentence_embedding]
         word_list = sent2word(text)
-        new,perturbed = swap(word_list,prob_vec,p_step)
+        new,perturbed = swap(word_list,prob_vec)
         sentence_list = new_sent_grad(text,new,perturbed)
         scores = [score(sent,tokenizer,model) for sent in sentence_list]
         
         loss = -1.0*scores[0]*np.linalg.norm(prob_vec)
-        def grad(y):
+        def grad(y, p_step=.05):
             gradient = np.zeros(len(new))
             for i,index in enumerate(perturbed[2]):
                 prob_vec[index] += p_step*perturbed[0][index]
@@ -257,13 +259,11 @@ def custom_loss(input):
                 gradient[index] = (p_loss-loss)/p_step
         return loss
 
-sentence = "Put sentence here"
-sent_embedding = (0,0,0,0,0,0,0) # TODO: convert sentence to embedding
 input = tf.keras.Input(shape=(50,))
 x = tf.keras.layers.Dense(10, activation="relu")(input)
 x = tf.keras.layers.Dense(5, activation="relu")(x)
-x = tf.keras.layers.Lambda(lambda x: x/2)
+x = tf.keras.layers.Lambda(lambda x: x/2)(x)
 x = tf.keras.layers.Dropout(.5)(x)
 model = tf.keras.Model(input,x)
 model.compile(loss=custom_loss(input), optimizer=tf.optimizers.Adam(learning_rate=0.001) )
-model.fit(sentence_embeddings, zero, batch_size = batch_size, epochs=90, shuffle=True, verbose=1)
+model.fit(pca_embeddings, 0, batch_size = 10, epochs=90, shuffle=True, verbose=1)
