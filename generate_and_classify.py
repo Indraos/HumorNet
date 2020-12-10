@@ -8,10 +8,13 @@ import random
 
 import numpy as np
 
+import matplotlib.pyplot as plt
+
 
 # load pretrained Google vectors
 pca_embeddings = pickle.load( open( "embedding.p", "rb" ) )
 embedded_sentence_inverter = pickle.load( open( "inverse.p", "rb" ) )
+td = pickle.load(open("td.p","rb"))
 
 tokenizer = transformers.AutoTokenizer.from_pretrained("bert-base-uncased")
 model = transformers.AutoModelForSequenceClassification.from_pretrained("bert-base-uncased", return_dict=True)
@@ -28,6 +31,8 @@ def get_rhymes(word):
     #Get list of rhyming words with the same syllable count
     try:
         ns = ru.count_syllables(word)
+        if ns == 1:
+            return [word]
         words = ph.get_perfect_rhymes(word)
         if ns in words:
             return words[ns]
@@ -100,7 +105,8 @@ def new_sent_grad(string,word_list,perturbed):
         if is_letter(char) and not building:
             building = True
         elif (not is_letter(char)) and (not building):
-            out+=char
+            for i in range(len(out)):
+                out[i]+=char
         elif (not is_letter(char)) and building:
             building = False
             if(perturbed[0][word_index]!=0):
@@ -135,6 +141,9 @@ def new_sent_grad(string,word_list,perturbed):
         print("ERROR: misalignment when reforming sentence")
 
     if len(out) != len(perturbed[2])+1:
+        print(perturbed[0])
+        print(len(out))
+        print(len(perturbed[2])+1)
         print("ERROR: perturb misalignment")
         
     # if perturbed_index != len(perturbed[1]):
@@ -147,6 +156,9 @@ def word_swap(word):
     #Swaps single word weighted by embedding similarity
     #TODO: Must implement long_embedding above in order to get what we want here
     rhymes = get_rhymes(word)
+    
+    return rhymes[int(random.random()*len(rhymes))]
+    
     WE = long_embedding(word)
     weights = []
     for r in rhymes:
@@ -165,12 +177,16 @@ def swap(word_list,prob_vec,p_step=.05):
     #Input: P_STEP is the variable for computing the discrete
     
     new = []
-    perturbed = [[],[]]
+    perturbed = [[],[],[]]
     
     for index,word in enumerate(word_list):
         samp = random.random()
         if prob_vec[index]+p_step >= samp:
-            new_word = word_swap(word)
+            new_word_temp = word_swap(word)
+            new_word = ""
+            for char in new_word_temp:
+                if is_letter(char):
+                    new_word+=char
             if prob_vec[index] < samp:
                 new.append(word)
                 perturbed[1].append(new_word)
@@ -216,19 +232,84 @@ def evaluate(sentence_embedding, prob_vec, p_step = .05):
     word_list = sent2word(text)
     new,perturbed = swap(word_list,prob_vec,p_step)
     sentence_list = new_sent_grad(text,new,perturbed)
+    print(sentence_list[0])
     scores = [score(sent,tokenizer,model) for sent in sentence_list]
     
     loss = -1.0*scores[0]*np.linalg.norm(prob_vec)
     
-    gradient = np.zeros(len(new))
+    gradient = np.zeros(len(prob_vec))
     
     for i,index in enumerate(perturbed[2]):
         prob_vec[index] += p_step*perturbed[0][index]
         p_mag = np.linalg.norm(prob_vec)
         prob_vec[index] -= p_step*perturbed[0][index]
-        p_loss = -1.0*scores[index]*p_mag
+        p_loss = -1.0*scores[i]*p_mag
         
         gradient[index] = (p_loss-loss)/p_step
     
     return loss,gradient
     
+
+#TRAINING
+
+def sigmoid(x):
+    return 1/(1 + np.exp(-x)) 
+
+def eval_and_back_prop(index,W_0,W_1,step_size=0.01):
+    samp = td[index]
+    x_0 = np.reshape(np.array(samp),250)
+    z_0 = np.dot(x_0,W_0)
+    x_1 = np.array([sigmoid(zi) for zi in z_0])
+    z_1 = np.dot(x_1,W_1)
+    p_out = np.array([sigmoid(zi) for zi in z_1])
+    
+    L,dLdp = evaluate(samp, p_out)
+
+    print("Swap Probabilities: ",p_out)
+
+    #Chain rule pieces
+
+    dpdz1 = np.array([pi*(1-pi) for pi in p_out])
+    dz1dx1 = []
+    for i in range(50):
+        dz1dx1.append(W_1[i][:])
+
+    dx1dz0 = np.array([x1i*(1-x1i) for x1i in x_1])
+    
+    #Putting chains together
+    
+    dLdz1 = dLdp*dpdz1
+    dLdW1 = np.array([[x_1[i]*dLdz1[j] for j in range(50)] for i in range(50)])
+    dLdx1 = np.array([np.dot(dz1dx1[i],dLdz1) for i in range(50)])
+    dLdz0 = dLdx1*dx1dz0
+    dLdW0 = np.array([[x_0[i]*dLdz0[j] for j in range(50)] for i in range(250)])
+    
+    return W_0 - step_size*dLdW0, W_1 - step_size*dLdW1, L
+ 
+
+epochs = 2000
+
+def train():
+    W_0 = np.random.rand(250,50)*2-1
+    W_1 = np.random.rand(50,50)*2-1
+    Loss = []
+    
+    for i in range(epochs):
+        index = int(len(td)*random.random())
+        W_0,W_1,L = eval_and_back_prop(index, W_0, W_1)
+        print("LOSS: ",L)
+        print("_______________________________________")
+        Loss.append(L)
+    
+    return W_0,W_1,Loss
+
+W_0,W_1,Loss = train()
+
+plt.plot(Loss)
+plt.show()
+
+pickle.dump(W_0, open( "W0.p", "wb" ) )
+pickle.dump(W_1, open( "W1.p", "wb" ) )
+pickle.dump(Loss, open( "L.p", "wb" ) )
+
+
